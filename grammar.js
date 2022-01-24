@@ -129,7 +129,7 @@ module.exports = grammar(add_inline_rules({
         // when trying to parse the `$._trigger_error` token in `$.link_title`.
         $._error,
         $._trigger_error,
-        
+
         // INLINE STRUCTURE
 
         // Opening and closing delimiters for code spans. These are sequences of one or more backticks.
@@ -185,7 +185,7 @@ module.exports = grammar(add_inline_rules({
     extras: $ => [],
 
     rules: {
-        document: $ => seq(optional($._ignore_matching_tokens), repeat($._block)),
+        document: $ => seq(optional($._ignore_matching_tokens), optional($.front_matter), repeat($._block)),
 
         // BLOCK STRUCTURE
 
@@ -267,6 +267,16 @@ module.exports = grammar(add_inline_rules({
         indented_code_block: $ => prec.right(seq($._indented_chunk, repeat(choice($._indented_chunk, $._blank_line)))),
         _indented_chunk: $ => seq($._indented_chunk_start, repeat(choice($._text, $._newline)), $._block_close, optional($._ignore_matching_tokens)),
 
+        // A YAML block at the start of the document.
+        //
+        // https://myst-parser.readthedocs.io/en/latest/syntax/syntax.html#front-matter
+        front_matter: $ => seq(
+                '---',
+                $.front_matter_yaml,
+                '---',
+        ),
+        front_matter_yaml: $ => repeat1(choice($._newline, $._text)),
+
         // A fenced code block. Fenced code blocks are mainly handled by the external scanner. In
         // case of backtick code blocks the external scanner also checks that the info string is
         // proper.
@@ -294,10 +304,14 @@ module.exports = grammar(add_inline_rules({
         )),
         code_fence_content: $ => repeat1(choice($._newline, $._text)),
         info_string: $ => choice(
+            seq(seq('{code-cell}', $._whitespace), optional($.language), repeat(choice($._text, $.backslash_escape, $.entity_reference, $.numeric_character_reference))),
+            seq(seq('{', $.directive, '}', $._whitespace), optional($.directive_arguments), repeat(choice($._text, $.backslash_escape, $.entity_reference, $.numeric_character_reference))),
             seq($.language, repeat(choice($._text, $.backslash_escape, $.entity_reference, $.numeric_character_reference))),
             repeat1(choice($._text, $.backslash_escape, $.entity_reference, $.numeric_character_reference)),
         ),
-        language: $ => prec.right(repeat1(prec(1, choice($._word, punctuation_without($, []), $.backslash_escape, $.entity_reference, $.numeric_character_reference)))), 
+        directive : $ => new RegExp('[a-zA-Z0-9-]+'),
+        directive_arguments: $ => prec.right(repeat1(prec(1, choice($._word, punctuation_without($, []), $.backslash_escape, $.entity_reference, $.numeric_character_reference)))),
+        language: $ => prec.right(repeat1(prec(1, choice($._word, punctuation_without($, []), $.backslash_escape, $.entity_reference, $.numeric_character_reference)))),
 
         // An HTML block. We do not emit addition nodes relating to the kind or structure or of the
         // html block as this is best done using language injections and a proper html parsers.
@@ -429,7 +443,7 @@ module.exports = grammar(add_inline_rules({
         // https://github.github.com/gfm/#blank-lines
         _blank_line: $ => seq($._blank_line_start, $._newline),
 
-        
+
         // CONTAINER BLOCKS
 
         // A block quote. This is the most basic example of a container block handled by the
@@ -517,14 +531,14 @@ module.exports = grammar(add_inline_rules({
         ),
 
         // INLINES
-        
+
         // A lot of inlines are defined in `add_inline_rules`, including:
         //
         // * collections of inlines
         // * code spans
         // * emphasis
         // * textual content
-        // 
+        //
         // This is done to reduce code duplication, as some inlines need to be parsed differently
         // depending on the context. For example inlines in ATX headings may not contain newlines.
 
@@ -691,7 +705,7 @@ module.exports = grammar(add_inline_rules({
 
         // Raw html. As with html blocks we do not emit additional information as this is best done
         // by a proper html tree-sitter grammar.
-        // 
+        //
         // https://github.github.com/gfm/#raw-html
         html_tag: $ => choice($._open_tag, $._closing_tag, $._html_comment, $._processing_instruction, $._declaration, $._cdata_section),
         _open_tag: $ => prec.dynamic(PRECEDENCE_LEVEL_HTML, seq('<', $._tag_name, repeat($._attribute), repeat(choice($._whitespace, $._soft_line_break)), optional('/'), '>')),
@@ -894,7 +908,7 @@ function add_inline_rules(grammar) {
                     }
                 }
             }
-            
+
             grammar.rules['_emphasis_star' + suffix_newline + suffix_link] = $ => prec.dynamic(PRECEDENCE_LEVEL_EMPHASIS, seq(alias($._emphasis_open_star, $.emphasis_delimiter), optional($._last_token_punctuation), $['_inline' + suffix_newline + '_no_star' + suffix_link], alias($._emphasis_close_star, $.emphasis_delimiter)));
             grammar.rules['_strong_emphasis_star' + suffix_newline + suffix_link] = $ => prec.dynamic(2 * PRECEDENCE_LEVEL_EMPHASIS, seq(alias($._emphasis_open_star, $.emphasis_delimiter), $['_emphasis_star' + suffix_newline + suffix_link], alias($._emphasis_close_star, $.emphasis_delimiter)));
             grammar.rules['_emphasis_underscore' + suffix_newline + suffix_link] = $ => prec.dynamic(PRECEDENCE_LEVEL_EMPHASIS, seq(alias($._emphasis_open_underscore, $.emphasis_delimiter), optional($._last_token_punctuation), $['_inline' + suffix_newline + '_no_underscore' + suffix_link], alias($._emphasis_close_underscore, $.emphasis_delimiter)));
@@ -915,7 +929,7 @@ function add_inline_rules(grammar) {
         }
         return cs;
     }
-    
+
     return grammar;
 }
 
